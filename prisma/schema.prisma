@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String
+  codename    String   @unique
+  realName    String?
+  rank        String   @default("Trainee")
+  xp          Int      @default(0)
+  avatarColor String   @default("#6c757d")
+  bio         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  missions      Mission[]
+  missionLogs   MissionLog[]
+  sentMessages  Message[]    @relation("SentMessages")
+  recvMessages  Message[]    @relation("ReceivedMessages")
+  deadDrops     DeadDrop[]
+  gadgets       Gadget[]
+  dossiers      Dossier[]
+  achievements  UserAchievement[]
+}
+
+model Mission {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  status      String   @default("active") // active, completed, failed, classified
+  priority    String   @default("medium")  // low, medium, high, critical
+  location    String?
+  lat         Float?
+  lng         Float?
+  deadline    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agent     User         @relation(fields: [agentId], references: [id])
+  agentId   String
+  logs      MissionLog[]
+}
+
+model MissionLog {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+
+  mission   Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  missionId String
+  agent     User    @relation(fields: [agentId], references: [id])
+  agentId   String
+}
+
+model Target {
+  id           String   @id @default(cuid())
+  name         String
+  alias        String?
+  threatLevel  String   @default("low") // low, medium, high, critical
+  status       String   @default("active") // active, neutralized, unknown, eliminated
+  nationality  String?
+  lastLocation String?
+  lat          Float?
+  lng          Float?
+  notes        String?
+  imageUrl     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Villain {
+  id           String   @id @default(cuid())
+  name         String
+  alias        String?
+  organization String?
+  threatLevel  String   @default("high")
+  status       String   @default("active") // active, captured, eliminated, unknown
+  specialty    String?
+  lastLocation String?
+  lat          Float?
+  lng          Float?
+  bio          String?
+  imageUrl     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  content     String   // encrypted
+  selfDestruct Boolean @default(false)
+  expiresAt   DateTime?
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  sender     User   @relation("SentMessages", fields: [senderId], references: [id])
+  senderId   String
+  receiver   User   @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  receiverId String
+}
+
+model DeadDrop {
+  id        String   @id @default(cuid())
+  content   String   // encrypted
+  passphrase String  // hashed
+  viewed    Boolean  @default(false)
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  creator   User   @relation(fields: [creatorId], references: [id])
+  creatorId String
+}
+
+model Gadget {
+  id          String   @id @default(cuid())
+  name        String
+  codename    String?
+  description String?
+  status      String   @default("available") // available, deployed, maintenance, destroyed
+  category    String   @default("surveillance") // surveillance, weapons, transport, comms, other
+  missionId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agent   User   @relation(fields: [agentId], references: [id])
+  agentId String
+}
+
+model Dossier {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  classification String @default("classified") // unclassified, classified, top-secret, eyes-only
+  tags        String?  // comma-separated
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agent   User   @relation(fields: [agentId], references: [id])
+  agentId String
+}
+
+model Achievement {
+  id          String @id @default(cuid())
+  key         String @unique
+  title       String
+  description String
+  icon        String
+  xpReward    Int    @default(100)
+
+  users UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  unlockedAt    DateTime @default(now())
+
+  user          User        @relation(fields: [userId], references: [id])
+  userId        String
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+  achievementId String
+
+  @@unique([userId, achievementId])
+}
