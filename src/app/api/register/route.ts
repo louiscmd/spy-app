@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   if (existing) {
     return NextResponse.json({ error: "Email or codename already taken" }, { status: 409 })
   }
-  const hashed = await bcrypt.hash(password, 12)
+  const hashed = await bcrypt.hash(password, 10)
   const colors = ["#6c757d","#495057","#adb5bd","#7c8a93","#5f7a8a"]
   const user = await prisma.user.create({
     data: {
