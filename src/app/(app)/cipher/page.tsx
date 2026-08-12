@@ -48,7 +48,7 @@ export default function CipherPage() {
   const [mode, setMode] = useState<"encode" | "decode">("encode")
   const [cipher, setCipher] = useState<CipherType>("caesar")
   const [shift, setShift] = useState(13)
-  const [key, setKey] = useState("MI6SECRET")
+  const [key, setKey] = useState("SPYAPP")
   const [copied, setCopied] = useState(false)
 
   function process() {
@@ -70,7 +70,7 @@ export default function CipherPage() {
 
   return (
     <div className="p-6 max-w-3xl">
-      <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-1">Q Branch Cryptography</p>
+      <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-1">Encryption Tools</p>
       <h1 className="text-xl font-semibold text-gray-100 mb-6">Cipher Tool</h1>
 
       <div className="card p-5 mb-4">

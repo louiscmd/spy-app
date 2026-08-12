@@ -5,19 +5,19 @@ import { signOut } from "next-auth/react"
 import { cn } from "@/lib/utils"
 
 const nav = [
-  { href: "/dashboard", label: "HQ", icon: "⬡" },
+  { href: "/dashboard", label: "Dashboard", icon: "⬡" },
   { href: "/profile", label: "Profile", icon: "◈" },
-  { href: "/status", label: "00 Status", icon: "★" },
+  { href: "/status", label: "Status", icon: "★" },
   { href: "/missions", label: "Missions", icon: "◎" },
   { href: "/targets", label: "Targets", icon: "⊕" },
-  { href: "/villains", label: "Villains", icon: "☠" },
-  { href: "/map", label: "Field Map", icon: "◉" },
-  { href: "/messages", label: "Comms", icon: "▣" },
+  { href: "/villains", label: "Suspects", icon: "☠" },
+  { href: "/map", label: "Map", icon: "◉" },
+  { href: "/messages", label: "Messages", icon: "▣" },
   { href: "/dead-drop", label: "Dead Drop", icon: "◆" },
   { href: "/cipher", label: "Cipher", icon: "⊞" },
-  { href: "/gadgets", label: "Gadgets", icon: "⚙" },
+  { href: "/gadgets", label: "Equipment", icon: "⚙" },
   { href: "/dossiers", label: "Dossiers", icon: "▤" },
-  { href: "/radar", label: "Radar", icon: "◌" },
+  { href: "/radar", label: "BT Radar", icon: "◌" },
 ]
 
 export default function Sidebar({ codename }: { codename: string }) {
@@ -27,11 +27,13 @@ export default function Sidebar({ codename }: { codename: string }) {
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-16 lg:w-52 bg-[#050505] border-r border-[#1a1a1a] fixed top-0 left-0 h-screen z-40 transition-all duration-200">
         <div className="flex items-center gap-3 px-3 lg:px-4 py-5 border-b border-[#1a1a1a]">
-          <div className="w-8 h-8 rounded bg-[#1a1a1a] flex items-center justify-center text-silver-400 font-bold text-sm shrink-0">
-            007
+          <div className="w-8 h-8 shrink-0 flex items-center justify-center">
+            <svg viewBox="0 0 100 100" className="w-6 h-6">
+              <polygon points="50,5 95,95 5,95" fill="white"/>
+            </svg>
           </div>
           <div className="hidden lg:block overflow-hidden">
-            <p className="text-[11px] text-gray-600 uppercase tracking-widest">Agent</p>
+            <p className="text-[11px] text-gray-600 uppercase tracking-widest">Spy App</p>
             <p className="text-sm font-medium text-gray-200 truncate">{codename}</p>
           </div>
         </div>

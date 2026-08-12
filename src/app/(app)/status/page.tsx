@@ -29,7 +29,7 @@ export default async function StatusPage() {
 
   return (
     <div className="p-6 max-w-4xl">
-      <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-1">Operative Standing</p>
+      <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-1">Operative Status</p>
       <h1 className="text-xl font-semibold text-gray-100 mb-6">00 Status</h1>
 
       {/* Rank card */}
@@ -55,7 +55,7 @@ export default async function StatusPage() {
             </div>
           </>
         ) : (
-          <p className="text-sm text-yellow-400">Maximum operative rank achieved — License to Kill granted ✓</p>
+          <p className="text-sm text-yellow-400">Maximum operative rank achieved — Top clearance achieved ✓</p>
         )}
       </div>
 
@@ -82,7 +82,7 @@ export default async function StatusPage() {
 
       {/* All achievements */}
       <div className="card p-5">
-        <h2 className="text-xs text-gray-600 uppercase tracking-wider mb-4">License to Kill — Achievements ({user.achievements.length}/{allAchievements.length})</h2>
+        <h2 className="text-xs text-gray-600 uppercase tracking-wider mb-4">Achievements ({user.achievements.length}/{allAchievements.length})</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {allAchievements.map(a => {
             const ua = user.achievements.find(x => x.achievementId === a.id)

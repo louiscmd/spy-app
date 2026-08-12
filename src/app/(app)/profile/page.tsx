@@ -19,7 +19,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="p-6 max-w-3xl">
-      <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-6">Agent Dossier</p>
+      <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-6">Agent Profile</p>
 
       {/* Profile card */}
       <div className="card p-6 mb-6">

@@ -17,7 +17,7 @@ export default function LoginPage() {
     setError("")
     const res = await signIn("credentials", { email, password, redirect: false })
     if (res?.error) {
-      setError("Invalid credentials. Access denied.")
+      setError("Invalid credentials.")
       setLoading(false)
     } else {
       router.push("/dashboard")
@@ -27,23 +27,24 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full border border-[#2a2a2a] bg-[#0a0a0a] mb-4">
-            <span className="text-2xl font-bold text-gray-300 tracking-tighter">007</span>
+          <div className="inline-flex items-center justify-center w-14 h-14 mb-5">
+            <svg viewBox="0 0 100 100" className="w-full h-full">
+              <polygon points="50,8 95,92 5,92" fill="white"/>
+            </svg>
           </div>
-          <h1 className="text-xl font-semibold text-gray-100 tracking-wider">MI6 AGENT PORTAL</h1>
-          <p className="text-xs text-gray-600 mt-1 tracking-widest uppercase">Classified Access</p>
+          <h1 className="text-xl font-semibold text-gray-100 tracking-wider">SPY APP</h1>
+          <p className="text-xs text-gray-600 mt-1 tracking-widest uppercase">Sign in to continue</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1.5">Agent Email</label>
+            <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1.5">Email</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-              className="input" placeholder="agent@mi6.gov.uk" required />
+              className="input" placeholder="you@example.com" required />
           </div>
           <div>
-            <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1.5">Passphrase</label>
+            <label className="text-xs text-gray-500 uppercase tracking-widest block mb-1.5">Password</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)}
               className="input" placeholder="••••••••" required />
           </div>
@@ -52,19 +53,15 @@ export default function LoginPage() {
           )}
           <button type="submit" disabled={loading}
             className="w-full btn btn-silver justify-center py-2.5 tracking-wider uppercase text-xs mt-2">
-            {loading ? "Authenticating..." : "Access Portal"}
+            {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
 
         <p className="text-center text-xs text-gray-600 mt-6">
-          New recruit?{" "}
+          No account?{" "}
           <Link href="/register" className="text-gray-400 hover:text-gray-200 underline underline-offset-2">
-            Register as Agent
+            Create one
           </Link>
-        </p>
-
-        <p className="text-center text-[10px] text-gray-800 mt-8 tracking-widest uppercase">
-          Unauthorised access is a criminal offence
         </p>
       </div>
     </div>

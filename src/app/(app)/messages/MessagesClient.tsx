@@ -2,7 +2,7 @@
 import { useState } from "react"
 import { formatDate, encrypt, decrypt } from "@/lib/utils"
 
-const SESSION_KEY = "MI6COMMS2024"
+const SESSION_KEY = "SPYAPP2024"
 
 type Msg = { id: string; content: string; senderId: string; receiverId: string; selfDestruct: boolean; read: boolean; createdAt: string; sender: { id: string; codename: string }; receiver: { id: string; codename: string } }
 type Agent = { id: string; codename: string }

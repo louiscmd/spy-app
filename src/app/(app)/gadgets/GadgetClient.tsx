@@ -56,7 +56,7 @@ export default function GadgetClient({ gadgets: initial }: { gadgets: Gadget[] }
             <h2 className="text-sm font-medium text-gray-300 uppercase tracking-wider mb-4">New Gadget</h2>
             <div className="space-y-3">
               <input className="input" placeholder="Gadget name *" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-              <input className="input" placeholder="Q Branch codename" value={form.codename} onChange={e => setForm(f => ({ ...f, codename: e.target.value }))} />
+              <input className="input" placeholder="Codename" value={form.codename} onChange={e => setForm(f => ({ ...f, codename: e.target.value }))} />
               <div className="grid grid-cols-2 gap-3">
                 <select className="input" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
                   <option value="surveillance">Surveillance</option>

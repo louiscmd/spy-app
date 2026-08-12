@@ -34,19 +34,19 @@ export default function VillainClient({ villains: initial }: { villains: Villain
       <div className="flex items-center justify-between mb-6">
         <div>
           <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-1">Rogues Gallery</p>
-          <h1 className="text-xl font-semibold text-gray-100">Villain Tracker</h1>
+          <h1 className="text-xl font-semibold text-gray-100">Suspect Tracker</h1>
         </div>
-        <button onClick={() => setShowNew(true)} className="btn btn-silver text-xs tracking-wider uppercase">+ Add Villain</button>
+        <button onClick={() => setShowNew(true)} className="btn btn-silver text-xs tracking-wider uppercase">+ Add Suspect</button>
       </div>
 
       {showNew && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
           <div className="card p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <h2 className="text-sm font-medium text-gray-300 uppercase tracking-wider mb-4">New Villain Profile</h2>
+            <h2 className="text-sm font-medium text-gray-300 uppercase tracking-wider mb-4">New Suspect Profile</h2>
             <div className="space-y-3">
               <input className="input" placeholder="Name *" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
               <input className="input" placeholder="Alias" value={form.alias} onChange={e => setForm(f => ({ ...f, alias: e.target.value }))} />
-              <input className="input" placeholder="Organization (e.g. SPECTRE)" value={form.organization} onChange={e => setForm(f => ({ ...f, organization: e.target.value }))} />
+              <input className="input" placeholder="Organization" value={form.organization} onChange={e => setForm(f => ({ ...f, organization: e.target.value }))} />
               <input className="input" placeholder="Specialty (e.g. nuclear weapons)" value={form.specialty} onChange={e => setForm(f => ({ ...f, specialty: e.target.value }))} />
               <div className="grid grid-cols-2 gap-3">
                 <select className="input" value={form.threatLevel} onChange={e => setForm(f => ({ ...f, threatLevel: e.target.value }))}>
@@ -59,7 +59,7 @@ export default function VillainClient({ villains: initial }: { villains: Villain
               <textarea rows={3} className="input resize-none" placeholder="Dossier / background…" value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} />
             </div>
             <div className="flex gap-2 mt-4">
-              <button onClick={create} disabled={!form.name || loading} className="btn btn-silver flex-1 justify-center text-xs uppercase tracking-wider">{loading ? "Adding…" : "Add Villain"}</button>
+              <button onClick={create} disabled={!form.name || loading} className="btn btn-silver flex-1 justify-center text-xs uppercase tracking-wider">{loading ? "Adding…" : "Add Suspect"}</button>
               <button onClick={() => setShowNew(false)} className="btn btn-ghost text-xs uppercase tracking-wider">Cancel</button>
             </div>
           </div>
@@ -68,7 +68,7 @@ export default function VillainClient({ villains: initial }: { villains: Villain
 
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="space-y-2">
-          {villains.length === 0 && <p className="text-gray-700 text-sm py-8 text-center">No villains logged. The world may be safe... for now.</p>}
+          {villains.length === 0 && <p className="text-gray-700 text-sm py-8 text-center">No suspects logged.</p>}
           {villains.map(v => (
             <div key={v.id} onClick={() => setSelected(v)}
               className={`card p-4 cursor-pointer transition-all hover:border-[#2a2a2a] ${selected?.id === v.id ? "border-gray-600" : ""}`}>

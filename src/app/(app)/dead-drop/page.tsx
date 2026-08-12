@@ -39,7 +39,7 @@ export default function DeadDropPage() {
 
   return (
     <div className="p-6 max-w-2xl">
-      <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-1">Ghost Protocol</p>
+      <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-1">Secure Drop</p>
       <h1 className="text-xl font-semibold text-gray-100 mb-2">Dead Drop</h1>
       <p className="text-sm text-gray-600 mb-6">Leave encrypted messages retrievable only with a secret passphrase. Viewed once — then destroyed.</p>
 

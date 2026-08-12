@@ -39,7 +39,7 @@ export default function TargetClient({ targets: initial }: { targets: Target[] }
     <div className="p-6 max-w-6xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-1">Intelligence Division</p>
+          <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-1">Field Intelligence</p>
           <h1 className="text-xl font-semibold text-gray-100">Target Database</h1>
         </div>
         <button onClick={() => setShowNew(true)} className="btn btn-silver text-xs tracking-wider uppercase">+ Add Target</button>

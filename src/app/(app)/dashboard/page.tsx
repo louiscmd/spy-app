@@ -21,7 +21,7 @@ export default async function Dashboard() {
   const stats = [
     { label: "Active Missions", value: activeMissions, icon: "◎", href: "/missions", color: "text-green-400" },
     { label: "Known Targets", value: targets, icon: "⊕", href: "/targets", color: "text-yellow-400" },
-    { label: "Active Villains", value: villains, icon: "☠", href: "/villains", color: "text-red-400" },
+    { label: "Active Suspects", value: villains, icon: "☠", href: "/villains", color: "text-red-400" },
     { label: "Unread Comms", value: messages, icon: "▣", href: "/messages", color: "text-blue-400" },
   ]
 
@@ -29,7 +29,7 @@ export default async function Dashboard() {
     <div className="p-6 max-w-5xl">
       {/* Header */}
       <div className="mb-8">
-        <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-1">MI6 Headquarters</p>
+        <p className="text-[11px] text-gray-600 uppercase tracking-widest mb-1">Operations Center</p>
         <h1 className="text-2xl font-semibold text-gray-100">
           Welcome back, <span className="text-gray-400">{user?.codename}</span>
         </h1>
@@ -105,7 +105,7 @@ export default async function Dashboard() {
           { href: "/missions", label: "New Mission", icon: "+" },
           { href: "/targets", label: "Add Target", icon: "⊕" },
           { href: "/messages", label: "Send Comms", icon: "▣" },
-          { href: "/radar", label: "Field Radar", icon: "◌" },
+          { href: "/radar", label: "BT Radar", icon: "◌" },
         ].map(a => (
           <Link key={a.href} href={a.href}
             className="btn btn-ghost justify-center py-3 text-xs tracking-wider uppercase">

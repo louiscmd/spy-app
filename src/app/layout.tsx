@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from "next"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "MI6 — Agent Portal",
-  description: "Classified. Authorised personnel only.",
+  title: "Spy App",
+  description: "Field intelligence and operations management",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "MI6",
+    title: "Spy App",
   },
 }
 
