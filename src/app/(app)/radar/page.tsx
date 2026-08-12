@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useRouter } from "next/navigation"
 
 type Device = {
   id: string
@@ -12,6 +13,7 @@ type Device = {
 }
 
 export default function RadarPage() {
+  const router = useRouter()
   const [devices, setDevices] = useState<Map<string, Device>>(new Map())
   const [scanning, setScanning] = useState(false)
   const [supported, setSupported] = useState<boolean | null>(null)
@@ -203,7 +205,9 @@ export default function RadarPage() {
               const age = now - dev.lastSeen
               const opacity = age < FADE_MS ? 1 : Math.max(0.15, 1 - (age - FADE_MS) / (STALE_MS - FADE_MS))
               return (
-                <g key={dev.id}>
+                <g key={dev.id} style={{ cursor: "pointer" }}
+                  onClick={() => router.push(`/tracker/${encodeURIComponent(dev.id)}?name=${encodeURIComponent(dev.name)}`)}>
+                  <circle cx={x} cy={y} r={12} fill="transparent"/>
                   <circle cx={x} cy={y} r={5} fill="#22c55e" opacity={opacity}/>
                   <circle cx={x} cy={y} r={10} fill="none" stroke="#22c55e" strokeWidth={0.5} opacity={opacity * 0.4}/>
                   <text x={x + 8} y={y - 3} fontSize={7} fill="#22c55e" opacity={opacity * 0.85}>{dev.name.slice(0, 14)}</text>
@@ -260,6 +264,7 @@ export default function RadarPage() {
                       <th className="text-right pb-2 font-normal">RSSI</th>
                       <th className="text-right pb-2 font-normal">~Distance</th>
                       <th className="text-right pb-2 font-normal">Last seen</th>
+                      <th className="pb-2"/>
                     </tr>
                   </thead>
                   <tbody>
@@ -268,7 +273,7 @@ export default function RadarPage() {
                       const fresh = age < 5000
                       const distM = Math.round(Math.pow(10, (-d.rssi - 59) / (10 * 2)) * 10) / 10
                       return (
-                        <tr key={d.id} className="border-b border-[#111] last:border-0">
+                        <tr key={d.id} className="border-b border-[#111] last:border-0 hover:bg-[#0a0a0a] transition-colors group">
                           <td className="py-2 pr-4">
                             <div className="flex items-center gap-2">
                               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${fresh ? "bg-green-400" : "bg-gray-700"}`}/>
@@ -278,6 +283,14 @@ export default function RadarPage() {
                           <td className="py-2 text-right font-mono text-gray-500">{d.rssi} dBm</td>
                           <td className="py-2 text-right text-gray-600">~{distM}m</td>
                           <td className="py-2 text-right text-gray-700">{fmtAge(age)}</td>
+                          <td className="py-2 pl-3">
+                            <button
+                              onClick={() => router.push(`/tracker/${encodeURIComponent(d.id)}?name=${encodeURIComponent(d.name)}`)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-green-600 hover:text-green-400 border border-green-900 hover:border-green-700 rounded px-2 py-0.5 whitespace-nowrap"
+                            >
+                              Track →
+                            </button>
+                          </td>
                         </tr>
                       )
                     })}
