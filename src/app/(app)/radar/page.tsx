@@ -24,12 +24,15 @@ type Platform = "chrome-desktop" | "chrome-android" | "ios" | "safari-mac" | "un
 
 function detectPlatform(): Platform {
   const ua = navigator.userAgent
+  // Check capability FIRST — Bluefy and similar iOS browsers add Web Bluetooth
+  // even though their UA still says "iPhone". UA alone is not reliable.
   const hasBluetooth = "bluetooth" in navigator
+  if (hasBluetooth) {
+    return /Android/.test(ua) ? "chrome-android" : "chrome-desktop"
+  }
+  // No Web Bluetooth — explain why based on platform
   if (/iP(hone|ad|od)/.test(ua)) return "ios"
-  if (/Android/.test(ua) && hasBluetooth) return "chrome-android"
-  if (/Android/.test(ua)) return "unsupported"
   if (/Macintosh/.test(ua) && /Safari/.test(ua) && !/Chrome/.test(ua)) return "safari-mac"
-  if (hasBluetooth) return "chrome-desktop"
   return "unsupported"
 }
 
