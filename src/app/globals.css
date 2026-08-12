@@ -44,6 +44,25 @@
   50% { opacity: 0; }
 }
 
+/* Tracker signal ring — CSS-driven, zero JS re-renders */
+@keyframes signal-pulse {
+  0%   { transform: scale(0.96); opacity: 0.7; }
+  50%  { transform: scale(1.04); opacity: 0.25; }
+  100% { transform: scale(0.96); opacity: 0.7; }
+}
+@keyframes signal-pulse-slow {
+  0%   { transform: scale(0.93); opacity: 0.5; }
+  50%  { transform: scale(1.07); opacity: 0.1; }
+  100% { transform: scale(0.93); opacity: 0.5; }
+}
+.signal-ring-1 { animation: signal-pulse      1.4s ease-in-out infinite; }
+.signal-ring-2 { animation: signal-pulse      1.4s ease-in-out infinite 0.35s; }
+.signal-ring-3 { animation: signal-pulse-slow 1.4s ease-in-out infinite 0.7s; }
+/* Speed reflects signal strength — driven by CSS variable set inline */
+.signal-ring-fast .signal-ring-1 { animation-duration: 0.8s; }
+.signal-ring-fast .signal-ring-2 { animation-duration: 0.8s; }
+.signal-ring-fast .signal-ring-3 { animation-duration: 0.8s; }
+
 * { box-sizing: border-box; }
 
 html, body {
