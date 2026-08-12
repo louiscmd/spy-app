@@ -1,18 +1,12 @@
 "use client"
 import { useEffect, useRef, useState, useCallback } from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-type GeoPos = { lat: number; lon: number; accuracy: number }
-
-type Reading = {
-  pos: GeoPos
-  rssi: number
-  ts: number
-}
+import { getEntry, registerDevice, subscribeToStore } from "@/lib/bt-store"
 
 // ─── Geo utils ───────────────────────────────────────────────────────────────
+
+type GeoPos = { lat: number; lon: number; accuracy: number }
+type Reading = { pos: GeoPos; rssi: number; ts: number }
 
 function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000
@@ -20,7 +14,9 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number): numb
   const dLon = ((lon2 - lon1) * Math.PI) / 180
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
@@ -29,7 +25,8 @@ function getBearing(lat1: number, lon1: number, lat2: number, lon2: number): num
   const φ1 = (lat1 * Math.PI) / 180
   const φ2 = (lat2 * Math.PI) / 180
   const y = Math.sin(dLon) * Math.cos(φ2)
-  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(dLon)
+  const x =
+    Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(dLon)
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360
 }
 
@@ -38,7 +35,6 @@ function rssiToDistance(rssi: number): number {
 }
 
 function rssiToStrength(rssi: number): number {
-  // -100 dBm → 0,  -40 dBm → 1
   return Math.max(0, Math.min(1, (rssi + 100) / 60))
 }
 
@@ -48,42 +44,69 @@ export default function TrackerPage() {
   const params = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
-  const deviceId = params.id as string
-  const deviceName = searchParams.get("name") || `Device ${deviceId.slice(-6).toUpperCase()}`
+  const deviceId = decodeURIComponent(params.id as string)
+  const deviceName =
+    searchParams.get("name") || `Device ${deviceId.slice(-6).toUpperCase()}`
 
+  // Device from bt-store
+  const [entry, setEntry] = useState(() => getEntry(deviceId))
+  const rssi = entry?.rssi ?? null
+
+  // GPS
   const [pos, setPos] = useState<GeoPos | null>(null)
-  const [rssi, setRssi] = useState<number | null>(null)
+  const [geoStatus, setGeoStatus] = useState<"requesting" | "ok" | "denied" | "error">("requesting")
+  const [geoMsg, setGeoMsg] = useState("")
+
+  // Direction
   const [readings, setReadings] = useState<Reading[]>([])
-  const [scanning, setScanning] = useState(false)
-  const [geoStatus, setGeoStatus] = useState<"waiting" | "ok" | "error">("waiting")
-  const [geoError, setGeoError] = useState("")
-  const [bleError, setBleError] = useState("")
   const [compassHeading, setCompassHeading] = useState<number | null>(null)
+
+  // BLE
+  const [bleStatus, setBleStatus] = useState<"watching" | "unavailable" | "connecting">("connecting")
+  const [bleMsg, setBleMsg] = useState("")
+
+  // Animation
   const [pulse, setPulse] = useState(0)
-  const [lastSeen, setLastSeen] = useState<number | null>(null)
+  const [now, setNow] = useState(Date.now())
 
-  const bleRef = useRef<{ stop: () => void } | null>(null)
-  const posRef = useRef<GeoPos | null>(null)
   const animRef = useRef<number>(0)
+  const posRef = useRef<GeoPos | null>(null)
+  const watchingRef = useRef(false)
 
-  // Keep posRef in sync so BLE callback has current position
   useEffect(() => { posRef.current = pos }, [pos])
 
-  // ── Pulse animation ─────────────────────────────────────────────────────
+  // ── Sync rssi from store ─────────────────────────────────────────────────
+  useEffect(() => {
+    setEntry(getEntry(deviceId))
+    const unsub = subscribeToStore(() => {
+      const e = getEntry(deviceId)
+      setEntry(e)
+      if (e?.rssi !== null && e?.rssi !== undefined && posRef.current) {
+        setReadings(prev => [
+          ...prev.slice(-99),
+          { pos: posRef.current!, rssi: e.rssi!, ts: Date.now() },
+        ])
+      }
+    })
+    return unsub
+  }, [deviceId])
+
+  // ── Pulse animation ──────────────────────────────────────────────────────
   useEffect(() => {
     const tick = () => {
       setPulse(p => (p + 2) % 360)
+      setNow(Date.now())
       animRef.current = requestAnimationFrame(tick)
     }
     animRef.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(animRef.current)
   }, [])
 
-  // ── Geolocation ─────────────────────────────────────────────────────────
+  // ── Geolocation ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!navigator.geolocation) {
       setGeoStatus("error")
-      setGeoError("Geolocation not supported in this browser")
+      setGeoMsg("Geolocation not supported")
       return
     }
     const watchId = navigator.geolocation.watchPosition(
@@ -97,10 +120,15 @@ export default function TrackerPage() {
         setGeoStatus("ok")
       },
       err => {
-        setGeoStatus("error")
-        setGeoError(err.message)
+        if (err.code === err.PERMISSION_DENIED) {
+          setGeoStatus("denied")
+          setGeoMsg("Location access denied — allow it in browser settings, then reload")
+        } else {
+          setGeoStatus("error")
+          setGeoMsg(err.message)
+        }
       },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
     )
     return () => navigator.geolocation.clearWatch(watchId)
   }, [])
@@ -110,94 +138,111 @@ export default function TrackerPage() {
     const handler = (e: DeviceOrientationEvent) => {
       if (e.alpha !== null) setCompassHeading(e.alpha)
     }
-    // iOS 13+ needs permission
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const DOE = DeviceOrientationEvent as any
     if (typeof DOE.requestPermission === "function") {
-      DOE.requestPermission().then((s: string) => {
-        if (s === "granted") window.addEventListener("deviceorientation", handler)
-      }).catch(() => {})
+      DOE.requestPermission()
+        .then((s: string) => { if (s === "granted") window.addEventListener("deviceorientation", handler) })
+        .catch(() => {})
     } else {
       window.addEventListener("deviceorientation", handler)
     }
     return () => window.removeEventListener("deviceorientation", handler)
   }, [])
 
-  // ── BLE scan ─────────────────────────────────────────────────────────────
-  const startBLE = useCallback(async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const nav = navigator as any
-    if (!nav.bluetooth) {
-      setBleError("Web Bluetooth not available — use Chrome on desktop or Android")
+  // ── Start watchAdvertisements on this specific device ────────────────────
+  const startWatching = useCallback(async () => {
+    const e = getEntry(deviceId)
+    if (!e) return
+
+    if (watchingRef.current || e.watching) {
+      setBleStatus("watching")
       return
     }
-    if (location.protocol !== "https:" && location.hostname !== "localhost") {
-      setBleError("HTTPS is required for Bluetooth scanning")
-      return
-    }
+
+    setBleStatus("connecting")
     try {
-      const scan = await nav.bluetooth.requestLEScan({ acceptAllAdvertisements: true })
-      bleRef.current = scan
-      setScanning(true)
-      setBleError("")
+      await e.device.watchAdvertisements()
+      watchingRef.current = true
+      registerDevice(e.device, e.rssi, true)
+      setBleStatus("watching")
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      nav.bluetooth.addEventListener("advertisementreceived", (event: any) => {
-        if (event.device.id !== deviceId) return
-        const r: number = event.rssi ?? -80
-        setRssi(r)
-        setLastSeen(Date.now())
-        if (posRef.current) {
-          setReadings(prev => [...prev.slice(-99), { pos: posRef.current!, rssi: r, ts: Date.now() }])
-        }
+      e.device.addEventListener("advertisementreceived", (ev: any) => {
+        registerDevice(e.device, ev.rssi ?? null, true)
       })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      if (msg.toLowerCase().includes("cancel") || msg.toLowerCase().includes("denied")) {
-        setBleError("Permission denied. Tap Retry to try again.")
-      } else {
-        setBleError(`BLE error: ${msg}`)
-      }
+      setBleStatus("unavailable")
+      setBleMsg(msg.includes("not found") || msg.includes("flag")
+        ? "Enable chrome://flags → #enable-web-bluetooth-new-permissions-backend for live RSSI"
+        : `RSSI unavailable: ${msg}`)
     }
   }, [deviceId])
 
-  useEffect(() => {
-    startBLE()
-    return () => { if (bleRef.current) try { bleRef.current.stop() } catch {} }
-  }, [startBLE])
+  useEffect(() => { startWatching() }, [startWatching])
 
-  // ── Direction logic ──────────────────────────────────────────────────────
-  // Best-signal reading in history (with enough GPS displacement to trust it)
-  const bestReading = readings.length >= 3
-    ? readings.reduce((a, b) => a.rssi > b.rssi ? a : b)
-    : null
+  // ── Direction maths ──────────────────────────────────────────────────────
+  const bestReading =
+    readings.length >= 3
+      ? readings.reduce((a, b) => (a.rssi > b.rssi ? a : b))
+      : null
 
-  // Only show arrow when current pos is meaningfully different from best-signal pos
-  const distToBest = bestReading && pos
-    ? haversine(pos.lat, pos.lon, bestReading.pos.lat, bestReading.pos.lon)
-    : 0
+  const distToBest =
+    bestReading && pos
+      ? haversine(pos.lat, pos.lon, bestReading.pos.lat, bestReading.pos.lon)
+      : 0
 
-  const rawBearing = bestReading && pos && distToBest > 3
-    ? getBearing(pos.lat, pos.lon, bestReading.pos.lat, bestReading.pos.lon)
-    : null
+  const rawBearing =
+    bestReading && pos && distToBest > 3
+      ? getBearing(pos.lat, pos.lon, bestReading.pos.lat, bestReading.pos.lon)
+      : null
 
-  // If compass heading available, make arrow relative to phone direction (north-up → heading-up)
-  const arrowAngle = rawBearing !== null
-    ? compassHeading !== null
-      ? (rawBearing - compassHeading + 360) % 360
-      : rawBearing
-    : null
+  // Make arrow heading-relative when compass is available
+  const arrowAngle =
+    rawBearing !== null
+      ? compassHeading !== null
+        ? (rawBearing - compassHeading + 360) % 360
+        : rawBearing
+      : null
 
-  // RSSI trend: last 3 vs 3 before that
-  const trend = readings.length >= 6
-    ? (readings.slice(-3).reduce((s, r) => s + r.rssi, 0) / 3) -
-      (readings.slice(-6, -3).reduce((s, r) => s + r.rssi, 0) / 3)
-    : null
+  // Trend: last 3 vs 3 before that
+  const trend =
+    readings.length >= 6
+      ? readings.slice(-3).reduce((s, r) => s + r.rssi, 0) / 3 -
+        readings.slice(-6, -3).reduce((s, r) => s + r.rssi, 0) / 3
+      : null
 
   const strength = rssi !== null ? rssiToStrength(rssi) : 0
   const distance = rssi !== null ? rssiToDistance(rssi) : null
-  const signalColor = strength > 0.65 ? "#22c55e" : strength > 0.35 ? "#eab308" : "#ef4444"
-  const isStale = lastSeen !== null && Date.now() - lastSeen > 10_000
+  const signalColor =
+    strength > 0.65 ? "#22c55e" : strength > 0.35 ? "#eab308" : "#ef4444"
+
+  // ── No entry in store ────────────────────────────────────────────────────
+  if (!entry) {
+    return (
+      <div className="p-6 max-w-lg mx-auto">
+        <div className="flex items-center gap-3 mb-6">
+          <button
+            onClick={() => router.push("/radar")}
+            className="w-8 h-8 flex items-center justify-center rounded-md border border-[#1a1a1a] text-gray-500 hover:text-gray-300 transition-all text-sm"
+          >
+            ←
+          </button>
+          <h1 className="text-base font-semibold text-gray-100">Tracker</h1>
+        </div>
+        <div className="card p-6 text-center">
+          <p className="text-sm text-gray-500 mb-4">Device not found in this session.</p>
+          <p className="text-xs text-gray-700 mb-4">
+            Go back to the radar, select a device, then tap Track.
+          </p>
+          <button onClick={() => router.push("/radar")} className="btn btn-silver text-xs px-4 py-2">
+            ← Back to Radar
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 max-w-lg mx-auto">
@@ -205,7 +250,7 @@ export default function TrackerPage() {
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => router.push("/radar")}
-          className="w-8 h-8 flex items-center justify-center rounded-md border border-[#1a1a1a] text-gray-500 hover:text-gray-300 hover:border-[#2a2a2a] transition-all text-sm"
+          className="w-8 h-8 flex items-center justify-center rounded-md border border-[#1a1a1a] text-gray-500 hover:text-gray-300 transition-all text-sm"
         >
           ←
         </button>
@@ -214,155 +259,194 @@ export default function TrackerPage() {
           <h1 className="text-base font-semibold text-gray-100 truncate">{deviceName}</h1>
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
-          <span className={`w-1.5 h-1.5 rounded-full ${scanning && !isStale ? "bg-green-400" : scanning ? "bg-yellow-500" : "bg-gray-700"}`}/>
-          <span className="text-xs text-gray-600">{scanning ? (isStale ? "No signal" : "Live") : "Off"}</span>
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              bleStatus === "watching"
+                ? "bg-green-400 animate-pulse"
+                : bleStatus === "connecting"
+                ? "bg-yellow-500 animate-pulse"
+                : "bg-gray-700"
+            }`}
+          />
+          <span className="text-xs text-gray-600">
+            {bleStatus === "watching"
+              ? "Live RSSI"
+              : bleStatus === "connecting"
+              ? "Connecting…"
+              : "No RSSI"}
+          </span>
         </div>
       </div>
 
       {/* ── Signal ring ── */}
       <div className="card p-6 mb-4 flex flex-col items-center">
         <div className="relative flex items-center justify-center mb-5" style={{ width: 220, height: 220 }}>
-          {/* Concentric pulse rings */}
           {[1, 0.78, 0.58].map((scale, i) => {
-            const pulseFactor = strength > 0 ? (Math.sin(((pulse + i * 60) * Math.PI) / 180) + 1) / 2 : 0
+            const pf = strength > 0 ? (Math.sin(((pulse + i * 60) * Math.PI) / 180) + 1) / 2 : 0
             return (
               <div
                 key={i}
                 className="absolute rounded-full border transition-all duration-300"
                 style={{
-                  width: 220 * scale,
-                  height: 220 * scale,
+                  width: 220 * scale, height: 220 * scale,
                   borderColor: signalColor,
-                  opacity: (0.08 + pulseFactor * 0.18) * strength,
-                  transform: `scale(${1 + pulseFactor * 0.04 * strength})`,
+                  opacity: (0.06 + pf * 0.2) * Math.max(strength, 0.1),
+                  transform: `scale(${1 + pf * 0.04 * strength})`,
                 }}
               />
             )
           })}
-
-          {/* Core circle */}
           <div
             className="w-28 h-28 rounded-full flex flex-col items-center justify-center border-2 transition-all duration-500"
             style={{
               borderColor: signalColor,
-              boxShadow: `0 0 ${20 * strength}px ${signalColor}30`,
+              boxShadow: `0 0 ${24 * strength}px ${signalColor}28`,
             }}
           >
             {rssi !== null ? (
               <>
-                <span className="text-3xl font-bold tabular-nums transition-colors duration-300" style={{ color: signalColor }}>
+                <span className="text-3xl font-bold tabular-nums" style={{ color: signalColor }}>
                   {rssi}
                 </span>
                 <span className="text-xs text-gray-600 mt-0.5">dBm</span>
               </>
             ) : (
-              <span className="text-xs text-gray-700 text-center px-2">
-                {scanning ? "Waiting for\nsignal…" : "Starting…"}
+              <span className="text-xs text-gray-700 text-center px-2 leading-snug">
+                {bleStatus === "connecting" ? "Starting…" : "No signal"}
               </span>
             )}
           </div>
         </div>
 
-        {/* Signal strength bar */}
+        {/* Strength bar */}
         <div className="w-full max-w-xs mb-4">
           <div className="h-1.5 bg-[#111] rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-500"
-              style={{ width: `${strength * 100}%`, background: `linear-gradient(to right, #ef4444, #eab308, ${signalColor})` }}
+              style={{
+                width: `${Math.max(0, strength) * 100}%`,
+                background: `linear-gradient(to right, #ef4444, #eab308, ${signalColor})`,
+              }}
             />
           </div>
           <div className="flex justify-between text-[10px] text-gray-700 mt-1">
-            <span>Weak</span>
-            <span>Strong</span>
+            <span>Weak (far)</span>
+            <span>Strong (close)</span>
           </div>
         </div>
 
-        {/* Status text */}
+        {/* Trend + distance */}
         <div className="text-center space-y-1">
           {trend !== null && Math.abs(trend) > 0.5 && (
-            <p className={`text-sm font-medium ${trend > 1.5 ? "text-green-400" : trend > 0 ? "text-green-600" : trend < -1.5 ? "text-red-400" : "text-red-600"}`}>
-              {trend > 2 ? "▲ Getting much closer" : trend > 0.5 ? "↑ Getting closer" : trend < -2 ? "▼ Moving away fast" : "↓ Moving away"}
+            <p
+              className={`text-sm font-medium ${
+                trend > 1.5
+                  ? "text-green-400"
+                  : trend > 0
+                  ? "text-green-600"
+                  : trend < -1.5
+                  ? "text-red-400"
+                  : "text-red-600"
+              }`}
+            >
+              {trend > 2
+                ? "▲ Getting much closer"
+                : trend > 0.5
+                ? "↑ Getting closer"
+                : trend < -2
+                ? "▼ Moving away fast"
+                : "↓ Moving away"}
             </p>
           )}
           {distance !== null && (
             <p className="text-xs text-gray-500">
-              {distance < 1 ? "Very close — under 1 metre" : `~${distance}m estimated distance`}
+              {distance < 1 ? "Under 1 metre away" : `~${distance}m estimated`}
             </p>
           )}
-          {rssi === null && scanning && (
-            <p className="text-xs text-gray-700">Move closer to detect the signal</p>
-          )}
-          {bleError && (
-            <div className="text-center mt-2">
-              <p className="text-xs text-red-400 mb-2">{bleError}</p>
-              <button onClick={startBLE} className="btn btn-ghost text-xs px-3 py-1.5">Retry BLE</button>
-            </div>
+          {bleStatus === "unavailable" && (
+            <p className="text-[11px] text-yellow-700 mt-1 max-w-xs">{bleMsg}</p>
           )}
         </div>
       </div>
 
-      {/* ── Direction arrow ── */}
+      {/* ── Direction compass ── */}
       <div className="card p-5 mb-4">
         <p className="text-xs text-gray-600 uppercase tracking-wider mb-4 text-center">Direction</p>
+
         {arrowAngle !== null ? (
           <div className="flex flex-col items-center gap-3">
-            <div className="relative w-28 h-28">
-              {/* Compass ring */}
-              <svg viewBox="0 0 112 112" className="absolute inset-0 w-full h-full">
-                <circle cx="56" cy="56" r="52" fill="none" stroke="#1a1a1a" strokeWidth="1"/>
-                {["N","NE","E","SE","S","SW","W","NW"].map((d, i) => {
-                  const a = (i * 45 - 90) * Math.PI / 180
-                  const r1 = 42, r2 = i % 2 === 0 ? 36 : 39
+            <div className="relative w-32 h-32">
+              <svg viewBox="0 0 128 128" className="w-full h-full">
+                <circle cx="64" cy="64" r="60" fill="none" stroke="#1a1a1a" strokeWidth="1" />
+                {["N", "E", "S", "W"].map((d, i) => {
+                  const a = (i * 90 - 90) * (Math.PI / 180)
                   return (
-                    <g key={d}>
-                      <line x1={56 + r1 * Math.cos(a)} y1={56 + r1 * Math.sin(a)}
-                        x2={56 + r2 * Math.cos(a)} y2={56 + r2 * Math.sin(a)}
-                        stroke="#2a2a2a" strokeWidth={i % 2 === 0 ? 1.5 : 0.8}/>
-                      {i % 2 === 0 && (
-                        <text x={56 + 28 * Math.cos(a)} y={56 + 28 * Math.sin(a)}
-                          textAnchor="middle" dominantBaseline="central"
-                          fontSize="9" fill={d === "N" ? "#9ca3af" : "#374151"} fontFamily="monospace">{d}</text>
-                      )}
-                    </g>
+                    <text
+                      key={d}
+                      x={64 + 48 * Math.cos(a)}
+                      y={64 + 48 * Math.sin(a)}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize="10"
+                      fill={d === "N" ? "#9ca3af" : "#374151"}
+                      fontFamily="monospace"
+                    >
+                      {d}
+                    </text>
+                  )
+                })}
+                {/* Tick marks */}
+                {Array.from({ length: 16 }).map((_, i) => {
+                  const a = (i * 22.5 - 90) * (Math.PI / 180)
+                  const r1 = 56, r2 = i % 4 === 0 ? 48 : 52
+                  return (
+                    <line
+                      key={i}
+                      x1={64 + r1 * Math.cos(a)} y1={64 + r1 * Math.sin(a)}
+                      x2={64 + r2 * Math.cos(a)} y2={64 + r2 * Math.sin(a)}
+                      stroke={i % 4 === 0 ? "#2a2a2a" : "#1a1a1a"}
+                      strokeWidth={i % 4 === 0 ? 1.5 : 0.8}
+                    />
                   )
                 })}
                 {/* Arrow */}
-                <g transform={`rotate(${arrowAngle} 56 56)`}>
-                  <polygon points="56,14 60,50 52,50" fill="#22c55e" opacity="0.9"/>
-                  <polygon points="56,98 60,62 52,62" fill="#1a3a2a" opacity="0.6"/>
-                  <circle cx="56" cy="56" r="3" fill="#22c55e"/>
+                <g transform={`rotate(${arrowAngle} 64 64)`}>
+                  <polygon points="64,12 68,56 60,56" fill="#22c55e" opacity="0.9" />
+                  <polygon points="64,116 68,72 60,72" fill="#1a3a2a" opacity="0.5" />
+                  <circle cx="64" cy="64" r="4" fill="#22c55e" />
                 </g>
               </svg>
             </div>
             <div className="text-center">
               <p className="text-xs text-gray-400">
-                Head toward <span className="text-green-400 font-medium">{Math.round(rawBearing ?? 0)}°</span>
-                {compassHeading !== null && " (relative to you)"}
+                Bearing{" "}
+                <span className="text-green-400 font-medium">{Math.round(rawBearing ?? 0)}°</span>
+                {compassHeading !== null && " — relative to phone orientation"}
               </p>
-              <p className="text-[10px] text-gray-700 mt-1">Based on strongest signal location</p>
+              <p className="text-[10px] text-gray-700 mt-0.5">
+                Points toward location with strongest signal
+              </p>
             </div>
           </div>
         ) : (
-          <div className="text-center py-4">
-            <div className="relative w-20 h-20 mx-auto mb-3">
-              <svg viewBox="0 0 80 80" className="w-full h-full opacity-20">
-                <circle cx="40" cy="40" r="36" fill="none" stroke="#4b5563" strokeWidth="1"/>
-                <polygon points="40,8 44,36 36,36" fill="#4b5563"/>
-                <circle cx="40" cy="40" r="3" fill="#4b5563"/>
-              </svg>
-            </div>
+          <div className="text-center py-3">
+            <svg viewBox="0 0 80 80" className="w-16 h-16 mx-auto mb-3 opacity-15">
+              <circle cx="40" cy="40" r="36" fill="none" stroke="#4b5563" strokeWidth="1" />
+              <polygon points="40,8 44,38 36,38" fill="#4b5563" />
+              <circle cx="40" cy="40" r="3" fill="#4b5563" />
+            </svg>
             <p className="text-xs text-gray-600">
-              {readings.length === 0
-                ? "Waiting for first signal…"
+              {geoStatus !== "ok"
+                ? "Waiting for GPS…"
                 : readings.length < 3
-                ? `Collecting data… (${readings.length}/3 readings)`
-                : "Walk around — direction will appear when you move"}
+                ? `Walk around to calibrate (${readings.length}/3 readings)`
+                : "Keep walking — arrow appears when you move far enough"}
             </p>
           </div>
         )}
       </div>
 
-      {/* ── Signal history bars ── */}
+      {/* ── Signal history ── */}
       {readings.length > 0 && (
         <div className="card p-4 mb-4">
           <div className="flex items-center justify-between mb-2">
@@ -370,34 +454,53 @@ export default function TrackerPage() {
             <span className="text-[10px] text-gray-700">{readings.length} readings</span>
           </div>
           <div className="flex items-end gap-px h-10">
-            {readings.slice(-50).map((r, i, arr) => {
-              const s = rssiToStrength(r.rssi)
+            {readings.slice(-60).map((rd, i, arr) => {
+              const s = rssiToStrength(rd.rssi)
               const col = s > 0.65 ? "#22c55e" : s > 0.35 ? "#eab308" : "#ef4444"
-              const opacity = 0.2 + (i / arr.length) * 0.8
               return (
-                <div key={i} className="flex-1 rounded-sm"
-                  style={{ height: `${Math.max(8, s * 100)}%`, background: col, opacity }}/>
+                <div
+                  key={i}
+                  className="flex-1 rounded-sm"
+                  style={{
+                    height: `${Math.max(8, s * 100)}%`,
+                    background: col,
+                    opacity: 0.2 + (i / arr.length) * 0.8,
+                  }}
+                />
               )
             })}
           </div>
           {bestReading && (
-            <p className="text-[10px] text-gray-700 mt-2">
-              Best: {bestReading.rssi} dBm · {rssiToDistance(bestReading.rssi)}m
-              {" at "}{new Date(bestReading.ts).toLocaleTimeString()}
+            <p className="text-[10px] text-gray-700 mt-1.5">
+              Best: {bestReading.rssi} dBm ≈ {rssiToDistance(bestReading.rssi)}m at{" "}
+              {new Date(bestReading.ts).toLocaleTimeString()}
             </p>
           )}
         </div>
       )}
 
-      {/* ── GPS + status ── */}
+      {/* ── Status panel ── */}
       <div className="card p-4 space-y-2.5">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-600">GPS</span>
-          <span className={`text-xs font-mono ${geoStatus === "ok" ? "text-green-500" : geoStatus === "error" ? "text-red-400" : "text-gray-600"}`}>
-            {geoStatus === "ok" && pos ? `${pos.lat.toFixed(5)}, ${pos.lon.toFixed(5)}` : geoStatus === "error" ? geoError : "Acquiring…"}
+        {/* GPS */}
+        <div className="flex items-start justify-between gap-4">
+          <span className="text-xs text-gray-600 shrink-0">GPS</span>
+          <span
+            className={`text-xs font-mono text-right ${
+              geoStatus === "ok"
+                ? "text-green-500"
+                : geoStatus === "denied"
+                ? "text-red-400"
+                : "text-gray-600"
+            }`}
+          >
+            {geoStatus === "ok" && pos
+              ? `${pos.lat.toFixed(5)}, ${pos.lon.toFixed(5)}`
+              : geoStatus === "requesting"
+              ? "Requesting permission…"
+              : geoMsg}
           </span>
         </div>
-        {pos && geoStatus === "ok" && (
+        {pos && (
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-600">GPS Accuracy</span>
             <span className="text-xs text-gray-500">±{Math.round(pos.accuracy)}m</span>
@@ -405,16 +508,14 @@ export default function TrackerPage() {
         )}
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-600">Compass</span>
-          <span className="text-xs text-gray-600">{compassHeading !== null ? `${Math.round(compassHeading)}°` : "Not available"}</span>
+          <span className="text-xs text-gray-600">
+            {compassHeading !== null ? `${Math.round(compassHeading)}°` : "Not available"}
+          </span>
         </div>
-        {lastSeen && (
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-600">Last signal</span>
-            <span className={`text-xs ${isStale ? "text-yellow-600" : "text-gray-500"}`}>
-              {Math.round((Date.now() - lastSeen) / 1000)}s ago
-            </span>
-          </div>
-        )}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-600">RSSI readings</span>
+          <span className="text-xs text-gray-600">{readings.length}</span>
+        </div>
       </div>
     </div>
   )
